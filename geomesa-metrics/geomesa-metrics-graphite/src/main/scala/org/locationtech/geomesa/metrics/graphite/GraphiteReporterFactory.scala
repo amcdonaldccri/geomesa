@@ -10,13 +10,14 @@ package org.locationtech.geomesa.metrics.graphite
 
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
-
 import com.codahale.metrics.graphite.{Graphite, GraphiteReporter}
 import com.codahale.metrics.{MetricRegistry, ScheduledReporter}
 import com.typesafe.config.Config
 import org.locationtech.geomesa.metrics.core.ReporterFactory
 import pureconfig.ConfigReader
 
+import javax.net.SocketFactory
+import javax.net.ssl.SSLSocketFactory
 import scala.util.control.NonFatal
 
 class GraphiteReporterFactory extends ReporterFactory {
@@ -39,9 +40,18 @@ class GraphiteReporterFactory extends ReporterFactory {
           .prefixedWith(graphite.prefix.orNull)
           .convertRatesTo(rates)
           .convertDurationsTo(durations)
-          .build(new Graphite(new InetSocketAddress(url, port.toInt)))
+          .build(new Graphite(new InetSocketAddress(url, port.toInt), getSocketFactory(graphite.ssl.getOrElse(false))))
 
       Some(reporter)
+    }
+  }
+
+  def getSocketFactory(ssl: Boolean): SocketFactory = {
+    if (ssl) {
+      SSLSocketFactory.getDefault()
+    }
+    else {
+      SocketFactory.getDefault()
     }
   }
 }
@@ -50,7 +60,7 @@ object GraphiteReporterFactory {
 
   import pureconfig.generic.semiauto._
 
-  case class GraphiteConfig(url: String, prefix: Option[String])
+  case class GraphiteConfig(url: String, prefix: Option[String], ssl: Option[Boolean])
 
   implicit val GraphiteConfigReader: ConfigReader[GraphiteConfig] = deriveReader[GraphiteConfig]
 }
