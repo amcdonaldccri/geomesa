@@ -30,8 +30,26 @@ import java.util.concurrent.TimeUnit
   */
 object IteratorCache extends StrictLogging {
 
-  // force evaluation of accessor cache while setting the context classloader to pick up our custm accessors
-  org.locationtech.geomesa.utils.geotools.SimpleFeaturePropertyAccessor.initialize()
+  private val initLock = new Object()
+  private var initialized = false
+
+  initLock.synchronized {
+    if (!initialized) {
+      val contextClassLoader = Thread.currentThread.getContextClassLoader
+      try{
+        Thread.currentThread.setContextClassLoader(getClass.getClassLoader)
+        // force evaluation of accessor cache while setting the context classloader to pick up our custom accessors
+        org.locationtech.geomesa.utils.geotools.SimpleFeaturePropertyAccessor.initialize()
+        initialized = true
+      } catch {
+        case e: Exception =>
+          logger.error("Failed to initialize SimpleFeaturePropertyAccessor", e)
+          throw e
+      } finally {
+        Thread.currentThread.setContextClassLoader(contextClassLoader)
+      }
+    }
+  }
 
   private val expiry = SystemProperty("geomesa.filter.remote.cache.expiry", "10 minutes").toDuration.get
 
